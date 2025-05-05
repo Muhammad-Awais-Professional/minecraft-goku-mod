@@ -1,9 +1,10 @@
-// src/main/java/com/awais/gokumod/GokuMod.java
-
 package com.awais.gokumod;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.Minecraft;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
@@ -13,6 +14,7 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.Material;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -25,10 +27,11 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 import org.slf4j.Logger;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 
 @Mod(GokuMod.MODID)
-public class GokuMod
-{
+public class GokuMod {
     public static final String MODID = "gokumod";
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -45,18 +48,20 @@ public class GokuMod
                     () -> new BlockItem(EXAMPLE_BLOCK.get(),
                             new Item.Properties().tab(CreativeModeTab.TAB_BUILDING_BLOCKS)));
 
-    public GokuMod(FMLJavaModLoadingContext context)
-    {
+    public GokuMod(FMLJavaModLoadingContext context) {
         IEventBus modEventBus = context.getModEventBus();
         modEventBus.addListener(this::commonSetup);
         BLOCKS.register(modEventBus);
         ITEMS.register(modEventBus);
+
+        // Register ourselves for server and command events
         MinecraftForge.EVENT_BUS.register(this);
+
+        // Load your config
         context.registerConfig(ModConfig.Type.COMMON, Config.SPEC);
     }
 
-    private void commonSetup(final FMLCommonSetupEvent event)
-    {
+    private void commonSetup(final FMLCommonSetupEvent event) {
         LOGGER.info("HELLO FROM COMMON SETUP");
 
         if (Config.logDirtBlock)
@@ -68,20 +73,40 @@ public class GokuMod
     }
 
     @SubscribeEvent
-    public void onServerStarting(ServerStartingEvent event)
-    {
+    public void onServerStarting(ServerStartingEvent event) {
         LOGGER.info("HELLO from server starting");
     }
 
-    @Mod.EventBusSubscriber(modid = MODID,
-            bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-    public static class ClientModEvents
-    {
+    @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+    public static class ClientModEvents {
         @SubscribeEvent
-        public static void onClientSetup(FMLClientSetupEvent event)
-        {
+        public static void onClientSetup(FMLClientSetupEvent event) {
             LOGGER.info("HELLO FROM CLIENT SETUP");
             LOGGER.info("MINECRAFT NAME >> {}", Minecraft.getInstance().getUser().getName());
+        }
+    }
+
+    /**
+     * Listens on the FORGE bus to register commands.
+     */
+    @Mod.EventBusSubscriber(modid = MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+    public static class CommandEvents {
+        @SubscribeEvent
+        public static void onRegisterCommands(RegisterCommandsEvent event) {
+            event.getDispatcher().register(
+                    Commands.literal("activate-goku")
+                            .requires(src -> src.hasPermission(0)) // all players
+                            .executes(CommandEvents::runActivateGoku)
+            );
+        }
+
+        private static int runActivateGoku(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+            String name = ctx.getSource().getPlayerOrException().getName().getString();
+            ctx.getSource().sendSuccess(
+                    Component.literal(name + " has been made goku"),
+                    false  // don’t broadcast to ops
+            );
+            return 1;
         }
     }
 }
